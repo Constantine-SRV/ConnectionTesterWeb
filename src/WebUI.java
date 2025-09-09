@@ -173,8 +173,8 @@ public class WebUI {
                                 <span class="db-title">MongoDB</span>
                             </div>
                             <input type="text" id="mongoConnection" 
-                                   placeholder="mongodb://user:password@host:port/database?replicaSet=rs0" 
-                                   value="mongodb://user:password@host:port/database?replicaSet=rs0">
+                                   placeholder="mongodb://user:p****p@host:port/database?replicaSet=rs0" 
+                                   value="mongodb://user:p****p@host:port/database?replicaSet=rs0">
                             <div class="example">Example: mongodb://user:pass@localhost:27017/admin</div>
                             <div class="button-group">
                                 <button class="btn-mongo" onclick="testMongo()">
@@ -190,9 +190,9 @@ public class WebUI {
                                 <span class="db-title">PostgreSQL</span>
                             </div>
                             <input type="text" id="postgresConnection" 
-                                   placeholder="postgresql://postgres:password@localhost:5432/postgres" 
-                                   value="postgresql://postgres:password@localhost:5432/postgres">
-                            <div class="example">Examples: postgresql://user:pass@localhost:5432/dbname or jdbc:postgresql://localhost:5432/dbname?user=postgres&password=pass</div>
+                                   placeholder="postgresql://postgres:p****p@localhost:5432/postgres" 
+                                   value="postgresql://postgres:p****p@localhost:5432/postgres">
+                            <div class="example">Examples: postgresql://user:pass@localhost:5432/dbname or jdbc:postgresql://localhost:5432/dbname?user=postgres&p****p=pass</div>
                             <div class="button-group">
                                 <button class="btn-postgres" onclick="testPostgres()">
                                     🔍 Test PostgreSQL
