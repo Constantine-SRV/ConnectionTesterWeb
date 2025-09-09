@@ -27,7 +27,7 @@ public class PostgresService {
 
             // PostgreSQL connection strings могут быть разные
             // jdbc:postgresql://host:port/database
-            // postgresql://user:password@host:port/database
+            // postgresql://user:p****p@host:port/database
 
             String jdbcUrl = connectionString;
 
@@ -146,8 +146,8 @@ public class PostgresService {
 
     // Преобразование postgresql:// в jdbc:postgresql://
     private static String convertToJdbcUrl(String url) {
-        // postgresql://user:password@host:port/database?params
-        // -> jdbc:postgresql://host:port/database?user=user&password=password&params
+        // postgresql://user:p****p@host:port/database?params
+        // -> jdbc:postgresql://host:port/database?user=user&p****p=p****p&params
 
         try {
             String cleanUrl = url.substring("postgresql://".length());
@@ -155,7 +155,7 @@ public class PostgresService {
             String userInfo = "";
             String hostPart = cleanUrl;
 
-            // Извлекаем user:password если есть
+            // Извлекаем user:p****p если есть
             if (cleanUrl.contains("@")) {
                 int atIndex = cleanUrl.indexOf("@");
                 userInfo = cleanUrl.substring(0, atIndex);
@@ -165,13 +165,13 @@ public class PostgresService {
             // Строим JDBC URL
             String jdbcUrl = "jdbc:postgresql://" + hostPart;
 
-            // Добавляем user и password как параметры
+            // Добавляем user и p****p как параметры
             if (!userInfo.isEmpty()) {
                 String separator = hostPart.contains("?") ? "&" : "?";
                 String[] userPass = userInfo.split(":", 2);
                 jdbcUrl += separator + "user=" + userPass[0];
                 if (userPass.length > 1) {
-                    jdbcUrl += "&password=" + userPass[1];
+                    jdbcUrl += "&p****p=" + userPass[1];
                 }
             }
 
