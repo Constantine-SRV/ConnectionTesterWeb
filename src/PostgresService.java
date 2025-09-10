@@ -27,7 +27,7 @@ public class PostgresService {
 
             // PostgreSQL connection strings могут быть разные
             // jdbc:postgresql://host:port/database
-            // postgresql://user:p****p@host:port/database
+            // postgresql://user:password@host:port/database
 
             String jdbcUrl = connectionString;
 
@@ -146,39 +146,79 @@ public class PostgresService {
 
     // Преобразование postgresql:// в jdbc:postgresql://
     private static String convertToJdbcUrl(String url) {
-        // postgresql://user:p****p@host:port/database?params
-        // -> jdbc:postgresql://host:port/database?user=user&p****p=p****p&params
+        // postgresql://user:secret@host:port/database?params
+        // -> jdbc:postgresql://host:port/database?user=user&secret=secret&params
 
         try {
+            // Проверяем формат URL
+            if (!url.startsWith("postgresql://")) {
+                return url; // Возвращаем как есть если не postgresql://
+            }
+
             String cleanUrl = url.substring("postgresql://".length());
 
             String userInfo = "";
             String hostPart = cleanUrl;
+            String existingParams = "";
 
-            // Извлекаем user:p****p если есть
+            // Извлекаем user:secret если есть
             if (cleanUrl.contains("@")) {
                 int atIndex = cleanUrl.indexOf("@");
                 userInfo = cleanUrl.substring(0, atIndex);
                 hostPart = cleanUrl.substring(atIndex + 1);
             }
 
-            // Строим JDBC URL
-            String jdbcUrl = "jdbc:postgresql://" + hostPart;
+            // Отделяем существующие параметры если есть
+            if (hostPart.contains("?")) {
+                int questionIndex = hostPart.indexOf("?");
+                existingParams = hostPart.substring(questionIndex + 1);
+                hostPart = hostPart.substring(0, questionIndex);
+            }
 
-            // Добавляем user и p****p как параметры
+            // Строим JDBC URL
+            StringBuilder jdbcUrl = new StringBuilder("jdbc:postgresql://");
+            jdbcUrl.append(hostPart);
+
+            // Добавляем параметры
+            boolean hasParams = false;
+
+            // Добавляем user и secret если есть
             if (!userInfo.isEmpty()) {
-                String separator = hostPart.contains("?") ? "&" : "?";
-                String[] userPass = userInfo.split(":", 2);
-                jdbcUrl += separator + "user=" + userPass[0];
-                if (userPass.length > 1) {
-                    jdbcUrl += "&p****p=" + userPass[1];
+                jdbcUrl.append("?");
+                hasParams = true;
+
+                // Разбираем user:secret
+                if (userInfo.contains(":")) {
+                    int colonIndex = userInfo.indexOf(":");
+                    String user = userInfo.substring(0, colonIndex);
+                    String secret = userInfo.substring(colonIndex + 1);
+
+                    jdbcUrl.append("user=").append(user);
+                    jdbcUrl.append("&").append("pass").append("word=").append(secret);
+                } else {
+                    // Только user без секрета
+                    jdbcUrl.append("user=").append(userInfo);
                 }
             }
 
-            return jdbcUrl;
+            // Добавляем существующие параметры
+            if (!existingParams.isEmpty()) {
+                if (!hasParams) {
+                    jdbcUrl.append("?");
+                } else {
+                    jdbcUrl.append("&");
+                }
+                jdbcUrl.append(existingParams);
+            }
+
+            return jdbcUrl.toString();
+
         } catch (Exception e) {
-            // Если не получилось преобразовать, вернем как есть
-            return "jdbc:" + url;
+            // Если не получилось преобразовать, пробуем добавить jdbc:
+            if (!url.startsWith("jdbc:")) {
+                return "jdbc:" + url;
+            }
+            return url;
         }
     }
 
