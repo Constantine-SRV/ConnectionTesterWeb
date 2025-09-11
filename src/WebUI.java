@@ -184,9 +184,9 @@ public class WebUI {
                             
                             <input type="text" id="mongoCommand" 
                                    placeholder="Command to execute (JSON format)" 
-                                   value='{"hello": 1}' 
+                                   value='{"ping": 1}' 
                                    style="margin-top: 10px;">
-                            <div class="example">Examples: {"hello": 1}, {"ping": 1}, {"listDatabases": 1}, {"serverStatus": 1}</div>
+                            <div class="example">Valid JSON commands: {"ping": 1}, {"hello": 1}, {"listDatabases": 1}, {"listCollections": 1}, {"serverStatus": 1}</div>
                             
                             <div class="button-group">
                                 <button class="btn-mongo" onclick="testMongo()">

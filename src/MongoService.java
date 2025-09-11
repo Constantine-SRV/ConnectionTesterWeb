@@ -45,23 +45,42 @@ public class MongoService {
 
                 // Выполняем команду - либо переданную, либо hello по умолчанию
                 Document commandToExecute;
+                String commandName = "hello";
+
                 if (commandJson != null && !commandJson.trim().isEmpty()) {
                     try {
                         // Парсим JSON команду
                         commandToExecute = Document.parse(commandJson);
                         result.data.put("executedCommand", commandJson);
+
+                        // Определяем имя команды для логирования
+                        if (!commandToExecute.isEmpty()) {
+                            commandName = commandToExecute.keySet().iterator().next();
+                        }
                     } catch (Exception e) {
-                        // Если не удалось распарсить, используем hello
-                        commandToExecute = new Document("hello", 1);
-                        result.data.put("commandParseError", "Failed to parse command: " + e.getMessage());
-                        result.data.put("executedCommand", "hello (fallback)");
+                        // Если не удалось распарсить, возвращаем ошибку
+                        result.success = false;
+                        result.message = "Invalid JSON command format";
+                        result.data.put("error", e.getMessage());
+                        result.data.put("hint", "Use valid JSON like: {\"ping\": 1} or {\"listCollections\": 1}");
+                        result.data.put("examples", new String[]{
+                                "{\"ping\": 1}",
+                                "{\"hello\": 1}",
+                                "{\"listDatabases\": 1}",
+                                "{\"listCollections\": 1}",
+                                "{\"serverStatus\": 1}",
+                                "{\"connectionStatus\": 1}",
+                                "{\"currentOp\": 1}",
+                                "{\"replSetGetStatus\": 1}"
+                        });
+                        return result;
                     }
                 } else {
                     commandToExecute = new Document("hello", 1);
                     result.data.put("executedCommand", "hello (default)");
                 }
 
-                // Выполняем команду
+                // Выполняем только запрошенную команду
                 try {
                     Document commandResult = adminDatabase.runCommand(commandToExecute);
 
@@ -72,58 +91,40 @@ public class MongoService {
                         // Ограничиваем вывод больших объектов
                         if (value instanceof List && ((List<?>)value).size() > 10) {
                             List<?> list = (List<?>) value;
-                            cmdResult.put(key, list.subList(0, 10) + " ... (showing first 10 of " + list.size() + ")");
+                            List<Object> preview = new ArrayList<>();
+                            for (int i = 0; i < Math.min(10, list.size()); i++) {
+                                preview.add(list.get(i));
+                            }
+                            cmdResult.put(key, preview);
+                            cmdResult.put(key + "_total_count", list.size());
+                            cmdResult.put(key + "_note", "Showing first 10 of " + list.size());
                         } else {
                             cmdResult.put(key, value);
                         }
                     }
                     result.data.put("commandResult", cmdResult);
 
-                    // Если это hello команда, извлекаем основную информацию
-                    if (commandToExecute.containsKey("hello")) {
-                        result.data.put("isWritablePrimary", commandResult.getBoolean("isWritablePrimary"));
-                        result.data.put("hosts", commandResult.get("hosts"));
-                        result.data.put("primary", commandResult.get("primary"));
-                        result.data.put("me", commandResult.get("me"));
+                    // Добавляем дополнительную информацию в зависимости от команды
+                    if (commandName.equals("hello") && commandResult.getBoolean("isWritablePrimary") != null) {
+                        result.data.put("connectionInfo", Map.of(
+                                "isWritablePrimary", commandResult.getBoolean("isWritablePrimary"),
+                                "hosts", commandResult.get("hosts"),
+                                "primary", commandResult.get("primary")
+                        ));
                     }
 
                 } catch (Exception e) {
+                    result.success = false;
+                    result.message = "Command execution failed";
                     result.data.put("commandError", e.getMessage());
+                    result.data.put("executedCommand", commandName);
 
-                    // Пробуем выполнить базовые команды для диагностики
-                    try {
-                        // Пробуем ping
-                        Document pingResult = adminDatabase.runCommand(new Document("ping", 1));
-                        result.data.put("ping", pingResult.get("ok"));
-                    } catch (Exception pingEx) {
-                        result.data.put("pingError", pingEx.getMessage());
+                    // Даем подсказку по возможной причине
+                    if (e.getMessage().contains("not authorized") || e.getMessage().contains("permission")) {
+                        result.data.put("hint", "User may not have permission to execute this command");
+                    } else if (e.getMessage().contains("UnknownHostException") || e.getMessage().contains("Timed out")) {
+                        result.data.put("hint", "Cannot connect to MongoDB server. Check host and port");
                     }
-                }
-
-                // Пробуем получить список баз данных если есть права
-                try {
-                    List<Map<String, Object>> databases = new ArrayList<>();
-                    for (Document db : mongoClient.listDatabases()) {
-                        Map<String, Object> dbInfo = new HashMap<>();
-                        dbInfo.put("name", db.getString("name"));
-                        Number size = (Number) db.get("sizeOnDisk");
-                        dbInfo.put("sizeOnDisk", size);
-                        databases.add(dbInfo);
-                    }
-                    result.data.put("databases", databases);
-                    result.data.put("databaseCount", databases.size());
-                } catch (Exception e) {
-                    result.data.put("databasesError", "No permission to list databases");
-                }
-
-                // Информация о сервере если доступна
-                try {
-                    Document serverStatus = adminDatabase.runCommand(new Document("serverStatus", 1));
-                    result.data.put("version", serverStatus.get("version"));
-                    result.data.put("uptime", serverStatus.get("uptime"));
-                    result.data.put("host", serverStatus.get("host"));
-                } catch (Exception e) {
-                    result.data.put("serverStatusError", "No permission for serverStatus");
                 }
 
                 return result;
