@@ -161,7 +161,7 @@ public class WebUI {
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>🔧 Database Connection Tester</h1>
+                        <h1>🔧 Database Connection Tester V-5</h1>
                         <p>Test your MongoDB and PostgreSQL connections</p>
                     </div>
                     
@@ -173,9 +173,21 @@ public class WebUI {
                                 <span class="db-title">MongoDB</span>
                             </div>
                             <input type="text" id="mongoConnection" 
-                                   placeholder="mongodb://user:p****p@host:port/database?replicaSet=rs0" 
-                                   value="mongodb://user:p****p@host:port/database?replicaSet=rs0">
-                            <div class="example">Example: mongodb://user:pass@localhost:27017/admin</div>
+                                   placeholder="mongodb://host:port/database?replicaSet=rs0" 
+                                   value="mongodb://192.168.55.30:27017,192.168.55.40:27017,192.168.0.60:27017/admin?replicaSet=rs0">
+                            <div class="example">Example: mongodb://host:27017/admin или полный URL с credentials</div>
+                            
+                            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                <input type="text" id="mongoUser" placeholder="Username" value="mongoAdmin" style="flex: 1;">
+                                <input type="text" id="mongoPass" placeholder="Secret" value="" style="flex: 1;">
+                            </div>
+                            
+                            <input type="text" id="mongoCommand" 
+                                   placeholder="Command to execute (JSON format)" 
+                                   value='{"hello": 1}' 
+                                   style="margin-top: 10px;">
+                            <div class="example">Examples: {"hello": 1}, {"ping": 1}, {"listDatabases": 1}, {"serverStatus": 1}</div>
+                            
                             <div class="button-group">
                                 <button class="btn-mongo" onclick="testMongo()">
                                     🔍 Test MongoDB
@@ -190,9 +202,16 @@ public class WebUI {
                                 <span class="db-title">PostgreSQL</span>
                             </div>
                             <input type="text" id="postgresConnection" 
-                                   placeholder="postgresql://postgres:p****p@localhost:5432/postgres" 
-                                   value="postgresql://postgres:p****p@localhost:5432/postgres">
-                            <div class="example">Examples: postgresql://user:pass@localhost:5432/dbname or jdbc:postgresql://localhost:5432/dbname?user=postgres&p****p=pass</div>
+                                   placeholder="postgresql://host:port/database или jdbc:postgresql://host:port/database" 
+                                   value="postgresql://localhost:5432/postgres">
+                            <div class="example">Examples: postgresql://localhost:5432/dbname или jdbc:postgresql://localhost:5432/dbname</div>
+                            
+                            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                <input type="text" id="postgresUser" placeholder="Username" value="postgres" style="flex: 1;">
+                                <input type="text" id="postgresPass" placeholder="Secret" value="" style="flex: 1;">
+                            </div>
+                            <div class="example">Оставьте поля пустыми если используете полный URL с credentials</div>
+                            
                             <div class="button-group">
                                 <button class="btn-postgres" onclick="testPostgres()">
                                     🔍 Test PostgreSQL
@@ -207,15 +226,41 @@ public class WebUI {
                 <script>
                     async function testMongo() {
                         const conn = document.getElementById('mongoConnection').value;
-                        await testConnection('mongo', conn);
+                        const user = document.getElementById('mongoUser').value;
+                        const pass = document.getElementById('mongoPass').value;
+                        const command = document.getElementById('mongoCommand').value;
+                        
+                        let url = '/api/test/mongo?connection=' + encodeURIComponent(conn);
+                        if (user) {
+                            url += '&user=' + encodeURIComponent(user);
+                        }
+                        if (pass) {
+                            url += '&secret=' + encodeURIComponent(pass);
+                        }
+                        if (command) {
+                            url += '&command=' + encodeURIComponent(command);
+                        }
+                        
+                        await testConnection('mongo', url, true);
                     }
                     
                     async function testPostgres() {
                         const conn = document.getElementById('postgresConnection').value;
-                        await testConnection('postgres', conn);
+                        const user = document.getElementById('postgresUser').value;
+                        const pass = document.getElementById('postgresPass').value;
+                        
+                        let url = '/api/test/postgres?connection=' + encodeURIComponent(conn);
+                        if (user) {
+                            url += '&user=' + encodeURIComponent(user);
+                        }
+                        if (pass) {
+                            url += '&secret=' + encodeURIComponent(pass);
+                        }
+                        
+                        await testConnection('postgres', url, true);
                     }
                     
-                    async function testConnection(type, connectionString) {
+                    async function testConnection(type, urlOrConnection, isFullUrl = false) {
                         const resultDiv = document.getElementById('result');
                         
                         resultDiv.innerHTML = '<span class="status-icon">⏳</span>Testing ' + type.toUpperCase() + ' connection...';
@@ -223,7 +268,14 @@ public class WebUI {
                         resultDiv.style.display = 'block';
                         
                         try {
-                            const response = await fetch('/api/test/' + type + '?connection=' + encodeURIComponent(connectionString));
+                            let fetchUrl;
+                            if (isFullUrl) {
+                                fetchUrl = urlOrConnection;
+                            } else {
+                                fetchUrl = '/api/test/' + type + '?connection=' + encodeURIComponent(urlOrConnection);
+                            }
+                            
+                            const response = await fetch(fetchUrl);
                             const data = await response.json();
                             
                             if (data.success) {

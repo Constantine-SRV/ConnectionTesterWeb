@@ -22,6 +22,10 @@ public class MongoService {
     }
 
     public static TestResult testConnection(String connectionString) {
+        return testConnection(connectionString, null);
+    }
+
+    public static TestResult testConnection(String connectionString, String commandJson) {
         try {
             // Валидация строки подключения
             if (connectionString == null || connectionString.isEmpty()) {
@@ -39,53 +43,87 @@ public class MongoService {
                 // Получаем базу данных admin
                 MongoDatabase adminDatabase = mongoClient.getDatabase("admin");
 
-                // Выполняем команду hello
-                Document helloResult = adminDatabase.runCommand(new Document("hello", 1));
-                result.data.put("isWritablePrimary", helloResult.getBoolean("isWritablePrimary"));
-                result.data.put("hosts", helloResult.get("hosts"));
-                result.data.put("primary", helloResult.get("primary"));
-                result.data.put("me", helloResult.get("me"));
-
-                // Получаем список баз данных
-                List<Map<String, Object>> databases = new ArrayList<>();
-                for (Document db : mongoClient.listDatabases()) {
-                    Map<String, Object> dbInfo = new HashMap<>();
-                    dbInfo.put("name", db.getString("name"));
-                    Number size = (Number) db.get("sizeOnDisk");
-                    dbInfo.put("sizeOnDisk", size);
-                    databases.add(dbInfo);
+                // Выполняем команду - либо переданную, либо hello по умолчанию
+                Document commandToExecute;
+                if (commandJson != null && !commandJson.trim().isEmpty()) {
+                    try {
+                        // Парсим JSON команду
+                        commandToExecute = Document.parse(commandJson);
+                        result.data.put("executedCommand", commandJson);
+                    } catch (Exception e) {
+                        // Если не удалось распарсить, используем hello
+                        commandToExecute = new Document("hello", 1);
+                        result.data.put("commandParseError", "Failed to parse command: " + e.getMessage());
+                        result.data.put("executedCommand", "hello (fallback)");
+                    }
+                } else {
+                    commandToExecute = new Document("hello", 1);
+                    result.data.put("executedCommand", "hello (default)");
                 }
-                result.data.put("databases", databases);
-                result.data.put("databaseCount", databases.size());
 
-                // Информация о сервере
-                Document serverStatus = adminDatabase.runCommand(new Document("serverStatus", 1));
-                result.data.put("version", serverStatus.get("version"));
-                result.data.put("uptime", serverStatus.get("uptime"));
-                result.data.put("host", serverStatus.get("host"));
-
-                // Статус replica set (если есть)
+                // Выполняем команду
                 try {
-                    Document replStatus = adminDatabase.runCommand(new Document("replSetGetStatus", 1));
-                    Map<String, Object> replicaInfo = new HashMap<>();
-                    replicaInfo.put("set", replStatus.getString("set"));
-                    replicaInfo.put("myState", replStatus.getInteger("myState"));
+                    Document commandResult = adminDatabase.runCommand(commandToExecute);
 
-                    // Информация о членах репликасета
-                    List<Map<String, Object>> members = new ArrayList<>();
-                    if (replStatus.containsKey("members")) {
-                        for (Document member : replStatus.getList("members", Document.class)) {
-                            Map<String, Object> memberInfo = new HashMap<>();
-                            memberInfo.put("name", member.getString("name"));
-                            memberInfo.put("state", member.getString("stateStr"));
-                            members.add(memberInfo);
+                    // Добавляем результат команды
+                    Map<String, Object> cmdResult = new HashMap<>();
+                    for (String key : commandResult.keySet()) {
+                        Object value = commandResult.get(key);
+                        // Ограничиваем вывод больших объектов
+                        if (value instanceof List && ((List<?>)value).size() > 10) {
+                            List<?> list = (List<?>) value;
+                            cmdResult.put(key, list.subList(0, 10) + " ... (showing first 10 of " + list.size() + ")");
+                        } else {
+                            cmdResult.put(key, value);
                         }
                     }
-                    replicaInfo.put("members", members);
-                    result.data.put("replicaSet", replicaInfo);
+                    result.data.put("commandResult", cmdResult);
+
+                    // Если это hello команда, извлекаем основную информацию
+                    if (commandToExecute.containsKey("hello")) {
+                        result.data.put("isWritablePrimary", commandResult.getBoolean("isWritablePrimary"));
+                        result.data.put("hosts", commandResult.get("hosts"));
+                        result.data.put("primary", commandResult.get("primary"));
+                        result.data.put("me", commandResult.get("me"));
+                    }
+
                 } catch (Exception e) {
-                    // Не replica set - это нормально
-                    result.data.put("replicaSet", "Not a replica set or access denied");
+                    result.data.put("commandError", e.getMessage());
+
+                    // Пробуем выполнить базовые команды для диагностики
+                    try {
+                        // Пробуем ping
+                        Document pingResult = adminDatabase.runCommand(new Document("ping", 1));
+                        result.data.put("ping", pingResult.get("ok"));
+                    } catch (Exception pingEx) {
+                        result.data.put("pingError", pingEx.getMessage());
+                    }
+                }
+
+                // Пробуем получить список баз данных если есть права
+                try {
+                    List<Map<String, Object>> databases = new ArrayList<>();
+                    for (Document db : mongoClient.listDatabases()) {
+                        Map<String, Object> dbInfo = new HashMap<>();
+                        dbInfo.put("name", db.getString("name"));
+                        Number size = (Number) db.get("sizeOnDisk");
+                        dbInfo.put("sizeOnDisk", size);
+                        databases.add(dbInfo);
+                    }
+                    result.data.put("databases", databases);
+                    result.data.put("databaseCount", databases.size());
+                } catch (Exception e) {
+                    result.data.put("databasesError", "No permission to list databases");
+                }
+
+                // Информация о сервере если доступна
+                try {
+                    Document serverStatus = adminDatabase.runCommand(new Document("serverStatus", 1));
+                    result.data.put("version", serverStatus.get("version"));
+                    result.data.put("uptime", serverStatus.get("uptime"));
+                    result.data.put("host", serverStatus.get("host"));
+                } catch (Exception e) {
+                    result.data.put("serverStatusError", "No permission for serverStatus");
                 }
 
                 return result;

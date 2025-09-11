@@ -27,7 +27,7 @@ public class PostgresService {
 
             // PostgreSQL connection strings могут быть разные
             // jdbc:postgresql://host:port/database
-            // postgresql://user:password@host:port/database
+            // postgresql://user:psw@host:port/database
 
             String jdbcUrl = connectionString;
 

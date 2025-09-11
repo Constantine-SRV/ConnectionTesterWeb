@@ -24,11 +24,45 @@ public class ApiHandler {
             String query = exchange.getRequestURI().getQuery();
             Map<String, String> params = parseQuery(query);
             String connectionString = params.get("connection");
+            String user = params.get("user");
+            String secret = params.get("secret");
+            String command = params.get("command");
 
-            MongoService.TestResult result = MongoService.testConnection(connectionString);
+            // Если переданы отдельные user и secret, добавляем их к строке подключения
+            if (connectionString != null && (user != null || secret != null)) {
+                connectionString = addMongoCredentials(connectionString, user, secret);
+            }
+
+            MongoService.TestResult result = MongoService.testConnection(connectionString, command);
 
             String json = toJson(result.success, result.message, result.data);
             sendResponse(exchange, json);
+        }
+
+        private String addMongoCredentials(String url, String user, String secret) {
+            // Если URL уже содержит @ значит credentials уже есть
+            if (url.contains("@")) {
+                return url;
+            }
+
+            // Добавляем credentials после mongodb://
+            if (url.startsWith("mongodb://")) {
+                String afterProtocol = url.substring("mongodb://".length());
+                StringBuilder newUrl = new StringBuilder("mongodb://");
+
+                if (user != null && !user.isEmpty()) {
+                    newUrl.append(user);
+                    if (secret != null && !secret.isEmpty()) {
+                        newUrl.append(":").append(secret);
+                    }
+                    newUrl.append("@");
+                }
+                newUrl.append(afterProtocol);
+
+                return newUrl.toString();
+            }
+
+            return url;
         }
     }
 
@@ -39,11 +73,47 @@ public class ApiHandler {
             String query = exchange.getRequestURI().getQuery();
             Map<String, String> params = parseQuery(query);
             String connectionString = params.get("connection");
+            String user = params.get("user");
+            String secret = params.get("secret");
+
+            // Если переданы отдельные user и secret, добавляем их к строке подключения
+            if (connectionString != null && (user != null || secret != null)) {
+                connectionString = addCredentialsToUrl(connectionString, user, secret);
+            }
 
             PostgresService.TestResult result = PostgresService.testConnection(connectionString);
 
             String json = toJson(result.success, result.message, result.data);
             sendResponse(exchange, json);
+        }
+
+        private String addCredentialsToUrl(String url, String user, String secret) {
+            // Добавляем credentials к URL
+            if (url.startsWith("postgresql://")) {
+                // Преобразуем в JDBC формат с параметрами
+                String jdbcUrl = "jdbc:" + url;
+                String separator = url.contains("?") ? "&" : "?";
+                if (user != null && !user.isEmpty()) {
+                    jdbcUrl += separator + "user=" + user;
+                    separator = "&";
+                }
+                if (secret != null && !secret.isEmpty()) {
+                    jdbcUrl += separator + "pass" + "word=" + secret;
+                }
+                return jdbcUrl;
+            } else if (url.startsWith("jdbc:postgresql://")) {
+                // Добавляем к существующему JDBC URL
+                String separator = url.contains("?") ? "&" : "?";
+                if (user != null && !user.isEmpty()) {
+                    url += separator + "user=" + user;
+                    separator = "&";
+                }
+                if (secret != null && !secret.isEmpty()) {
+                    url += separator + "pass" + "word=" + secret;
+                }
+                return url;
+            }
+            return url;
         }
     }
 
